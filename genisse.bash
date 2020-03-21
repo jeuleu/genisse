@@ -64,7 +64,9 @@ EOUsage
 function displayInteractiveUsage() {
 cat << EOInteractiveUsage
 	ex[tension] [<ext>]	Set or display extension for file search.
-	ls			List files for defined extension
+	ls [<id>]		With no args, display list of files with defined extension,
+				or performs 'ls -l' on corresponding <id> file in list.
+	vi <id>			Edits the <id> file in fil list. 
 
 	q[uit]			Quit prompt command.
 	h[elp]     		Displays this help for interactive commands.
@@ -147,7 +149,6 @@ function checkResultThenGetArrayFromList() {
 # list array elements
 function displayArrayElementsWithIndex() {
 	declare -a arrayDisplay=("${!1}") # warning: do not use existing variable name
-	declare -i index
 		
 	if [[ ${#arrayDisplay[@]} > 0 ]]; then
 		for index in $(seq 0 $((${#arrayDisplay[@]}-1)) ) ; do
@@ -159,25 +160,24 @@ function displayArrayElementsWithIndex() {
 }
 
 # process command for given item
-# param 1: array od data
-# param 2: index of item to process
+# param 1: command
+# param 2: data array
+# param 3: index of item to process
 function processCommandOnArrayItem() {
-	declare -a arrayProcess=("${!1}") # warning: do not use existing variable name
-	paramIndex=$2
+	local command=${1:-echo}
+	declare -a arrayProcess=("${!2}") # warning: do not use existing variable name
+	paramIndex=$3
 	itemIndex=$(($paramIndex - 1))
 	
 	# control context	
 	if [ ${#arrayProcess[@]} -eq 0 ]; then
 		echo "	No value for this command"
-	elif [ $paramIndex -le 0 ]; then
-		echo "ERROR: Index out of bounds. Min index=1"
-		displayArrayElementsWithIndex arrayProcess[@]
-	elif [ $paramIndex -gt ${#arrayProcess[@]} ]; then
-		echo "ERROR: Index out of bounds. Max index=${#arrayProcess[@]}"
+	elif [[ $paramIndex -le 0 || $paramIndex -gt ${#arrayProcess[@]} ]]; then
+		echo "ERROR: Index out of bounds [1 .. ${#arrayProcess[@]}]"
 		displayArrayElementsWithIndex arrayProcess[@]
 	else
-#		echo "${paramIndex}: ${arrayProcess[$itemIndex]}"
-		ls -ls ${arrayProcess[$itemIndex]}
+		echo "index=${paramIndex}, command: '$command ${arrayProcess[$itemIndex]}'"
+		$command ${arrayProcess[$itemIndex]}
 	fi
 }
 
@@ -193,21 +193,29 @@ function processCommandOnArrayItem() {
 # Functions for command processing
 # --------------------------------
 
+# List files
+# ---------
+
+# read and store files list
+function initializeFilesList() {
+	# store information in an array, using global variable
+	command="ls *${FILE_EXTENSION}"	
+	declare -g FILE_LIST_ARRAY=$(checkResultThenGetArrayFromList "$command")
+}
+
 
 # list files for given extension
 function processListFilesCommand() {
 	# first parameter ignored for call in command loop
 	shift
 
-	command="ls *${FILE_EXTENSION}"	
+	# store information in an array, using global variable
+	initializeFilesList
 
-	# store information in an array
-	declare -g FILE_LIST_ARRAY=$(checkResultThenGetArrayFromList "$command")
-	
 	echo
 	# process command for item number if given
 	if [ $# -gt 0 ]; then
-		processCommandOnArrayItem FILE_LIST_ARRAY[@] $1
+		processCommandOnArrayItem "ls -la" FILE_LIST_ARRAY[@] $1
 	else
 		displayArrayElementsWithIndex FILE_LIST_ARRAY[@]
 	fi
@@ -215,6 +223,31 @@ function processListFilesCommand() {
 	echo
 	echo "FILE_EXTENSION=$FILE_EXTENSION, size=${#FILE_LIST_ARRAY[@]}"
 }
+
+# Edit file
+# ---------
+
+# list files for given extension
+function processEditFileCommand() {
+	# first parameter ignored for call in command loop
+	shift
+
+	# store information in an array, using global variable
+	initializeFilesList
+
+	echo
+	# process command for item number if given
+	if [ $# -gt 0 ]; then
+		processCommandOnArrayItem "vi" FILE_LIST_ARRAY[@] $1
+	else
+		echo "ERROR: please provide file id."
+		displayArrayElementsWithIndex FILE_LIST_ARRAY[@]
+	fi
+	
+	echo
+	echo "FILE_EXTENSION=$FILE_EXTENSION, size=${#FILE_LIST_ARRAY[@]}"
+}
+
 
 # initialize context
 function initializeContext() {
@@ -263,6 +296,11 @@ function waitForCommand() {
 			# list files
 			ls* )
 				processListFilesCommand $command
+				;;
+				
+			# edit file
+			vi* )
+				processEditFileCommand $command
 				;;
 				
 			# Control commands:
