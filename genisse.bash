@@ -119,9 +119,16 @@ BEGIN {
 	RS=" "
 	printf "("
 }
-{
+# be carefull: last file name can end with optional carriage return
+$0 ~ /.txt\n?$/ { 
 	gsub(/\n$/, "", $0) # remove trailing carriage return
-	printf "\x27" $0 "\x27 "
+	printf "\x27" partOfName $0 "\x27 "
+	
+	partOfName = ""
+}
+# build file name in case it includes spaces
+$0 !~ /.txt$/ {
+	partOfName = sprintf("%s%s ", partOfName, $0)
 }
 END {
 	printf ")" 
@@ -177,7 +184,7 @@ function processCommandOnArrayItem() {
 		displayArrayElementsWithIndex arrayProcess[@]
 	else
 		echo "index=${paramIndex}, command: '$command ${arrayProcess[$itemIndex]}'"
-		$command ${arrayProcess[$itemIndex]}
+		$command "${arrayProcess[$itemIndex]}"
 	fi
 }
 
@@ -200,6 +207,9 @@ function processCommandOnArrayItem() {
 function initializeFilesList() {
 	# store information in an array, using global variable
 	command="ls *${FILE_EXTENSION}"	
+
+	# to see function result uncomment following line
+#	checkResultThenGetArrayFromList "$command"
 	declare -g FILE_LIST_ARRAY=$(checkResultThenGetArrayFromList "$command")
 }
 
@@ -208,6 +218,7 @@ function initializeFilesList() {
 function processListFilesCommand() {
 	# first parameter ignored for call in command loop
 	shift
+	itemId=$1
 
 	# store information in an array, using global variable
 	initializeFilesList
@@ -215,7 +226,7 @@ function processListFilesCommand() {
 	echo
 	# process command for item number if given
 	if [ $# -gt 0 ]; then
-		processCommandOnArrayItem "ls -la" FILE_LIST_ARRAY[@] $1
+		processCommandOnArrayItem "ls -la" FILE_LIST_ARRAY[@] itemId
 	else
 		displayArrayElementsWithIndex FILE_LIST_ARRAY[@]
 	fi
